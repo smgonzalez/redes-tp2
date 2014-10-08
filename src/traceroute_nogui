@@ -1,0 +1,51 @@
+#!/usr/bin/env python2
+
+import sys
+import pygeoip
+import time
+
+from scapy.all import *
+
+class Tracer:
+
+	def __init__(self):
+		self.icmp = []
+		self.gi = pygeoip.GeoIP("/usr/share/GeoIP/GeoIP.dat")
+
+	def trace(self, hostname):
+		for ttl in range(1, 255):
+			packet = IP(dst=hostname, ttl=ttl) / ICMP()
+			
+			tt = 0.0
+
+			for i in range(10):
+				t0 = time.time()
+				ans = sr1(packet, verbose=0, timeout=1)
+				rtt = time.time() - t0
+				if not ans:
+					break
+				tt += rtt
+
+			if ans:
+				tt = tt / 10.0
+			
+			self.icmp.append((ttl, ans))
+
+			if ans and ans.type == 0:
+				print str(ttl) + "\t" + str(ans.src) + " \techo-reply" + "\t" + self.gi.country_name_by_name(str(ans.src)) + "\t" + str(tt)
+				break
+			elif ans and ans.type == 11:
+				print str(ttl) + "\t" + str(ans.src) + " \techo-request" + "\t" + self.gi.country_name_by_name(str(ans.src)) + "\t" + str(tt)
+			else:
+				print str(ttl) + "\t*\t*\t*\t" + str(tt)
+
+def main(argv=sys.argv):
+	if len(argv) < 2:
+		print "$ sudo ./traceroute hostname"
+		sys.exit(-1)
+
+	tracer = Tracer()
+	tracer.trace(argv[1])
+
+if __name__=='__main__':
+	main()
