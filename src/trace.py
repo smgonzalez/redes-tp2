@@ -134,8 +134,8 @@ class Route:
 				hop.zscore = (hop.rtti - average) / math.sqrt(variance)
 				line = str(hop.packet.src)
 				
-				if record:
-					line += str(record['time_zone'])
+				if hop.geoip:
+					line += "(" + str(hop.geoip['time_zone']) + ")"
 
 				line += "\t" + str(hop.zscore).replace('.', ',')
 				line += "\t" + str(hop.rtti).replace('.', ',')
