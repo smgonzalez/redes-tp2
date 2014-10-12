@@ -20,6 +20,7 @@ universities = {'Inglaterra' : 'www.ox.ac.uk',
 				'Noruega' : 'www.uio.no',
 				'Israel' : 'new.huji.ac.il',
 				'Italia' : 'www.uniroma1.it',
+				'Japon' : 'www.u-tokyo.ac.jp'
 				 }
 
 
@@ -55,7 +56,7 @@ class Route:
 		self.clear()
 		hasReply = true
 		print "Route: " + hostname
-		for ttl in range(MAX_TTL):
+		for ttl in range(1,MAX_TTL+1):
 			packet = IP(dst=hostname, ttl=ttl) / ICMP()
 			rtt = time.clock()
 			answer = sr1(packet, timeout=1, verbose=0)
@@ -112,15 +113,33 @@ class Route:
 
 		variance = variance / count
 
-		print "Average: " + str(average)
-		print "Variance: " + str(variance)
+		print "Average: " + str(average).replace('.', ',')
+		print "Variance: " + str(variance).replace('.', ',')
+		print "Standard Deviation: " + str(math.sqrt(variance)).replace('.', ',')
 
-		print "ZScore"
+		print "Average+SD: " + str(average + math.sqrt(variance)).replace('.', ',')
+		print "Average-SD: " + str(average - math.sqrt(variance)).replace('.', ',')
+
+		line = "IP"
+		line += "\t" + "zscore"
+		line += "\t" + "rtti"
+		line += "\t" + "average"
+		line += "\t" + "variance"
+		line += "\t" + "Average+SD"
+		line += "\t" + "Average-SD"
+		print line
 
 		for hop in self.hops:
 			if hop.packet:
 				hop.zscore = (hop.rtti - average) / math.sqrt(variance)
-				print str(hop.packet.src) + "\t" + str(hop.zscore)
+				line = str(hop.packet.src)
+				line += "\t" + str(hop.zscore).replace('.', ',')
+				line += "\t" + str(hop.rtti).replace('.', ',')
+				line += "\t" + str(average).replace('.', ',')
+				line += "\t" + str(math.sqrt(variance)).replace('.', ',')
+				line += "\t" + str(average + math.sqrt(variance)).replace('.', ',')
+				line += "\t" + str(average - math.sqrt(variance)).replace('.', ',')
+				print line #jeje
 
 	def clear(self):
 		self.hops = []
@@ -128,10 +147,13 @@ class Route:
 def main(argv=sys.argv):
 	route = Route()
 
-	for university in universities:
-		route.trace(universities[university])
-		route.zscore()
-		print "-" * 80
+#	for university in universities:
+#		route.trace(universities[university])
+#		route.zscore()
+#		print "-" * 80
+
+	route.trace('www.uio.no')
+	route.zscore()
 
 if __name__ == '__main__':
 	main()
