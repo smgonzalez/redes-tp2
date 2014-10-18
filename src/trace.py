@@ -13,14 +13,15 @@ EXACTAS = "dc.uba.ar"
 
 # Universidades - http://www.webometrics.info/es/Europe
 
-universities = {'Inglaterra' : 'www.ox.ac.uk',
-				'Finlandia' : 'www.helsinki.fi',
-				'Alemania' : 'www.uva.nl',
-				'Belgica' : 'www.kuleuven.be',
-				'Noruega' : 'www.uio.no',
-				'Israel' : 'new.huji.ac.il',
-				'Italia' : 'www.uniroma1.it',
-				'Japon' : 'www.u-tokyo.ac.jp'
+universities = {'inglaterra' : 'www.ox.ac.uk',
+				'finlandia' : 'www.helsinki.fi',
+				'alemania' : 'www.uva.nl',
+				'belgica' : 'www.kuleuven.be',
+				'noruega' : 'www.uio.no',
+				'israel' : 'new.huji.ac.il',
+				'italia' : 'www.uniroma1.it',
+				'japon' : 'www.u-tokyo.ac.jp',
+				'australia' : 'www.utas.edu.au'
 				 }
 
 
@@ -35,6 +36,8 @@ false = False
 true = True
 
 GEOIP_CITY_DAT = "GeoLiteCity.dat"
+REPEAT_COUNT = 3
+CANT_NOT_REPLYS = 3
 
 class Hop:
 	ttl = 0
@@ -53,19 +56,46 @@ class Route:
 		self.geoip = pygeoip.GeoIP(GEOIP_CITY_DAT)
 
 	def trace(self, hostname):
-		self.clear()
+		
+		self.hops = []
+
 		hasReply = true
 		print "Route: " + hostname
+
+		cant_not_replys = 0
 		for ttl in range(1,MAX_TTL+1):
-			packet = IP(dst=hostname, ttl=ttl) / ICMP()
-			rtt = time.clock()
-			answer = sr1(packet, timeout=1, verbose=0)
-			rtt = time.clock() - rtt
+
+			rtt_total = 0
+			rtt_count = 0	
+			for i in range(REPEAT_COUNT):
+			
+				packet = IP(dst=hostname, ttl=ttl) / ICMP()
+				rtt = time.clock()
+				answer = sr1(packet, timeout=1, verbose=0)
+				rtt = time.clock() - rtt
+				
+				answer_ip = ""
+
+				if answer:
+					rtt_total += rtt
+					rtt_count += 1
+					answer_ip = answer.src
+					cant_not_replys = 0
+				else:
+					cant_not_replys += 1
+
+
+			if rtt_count > 0:
+				rtt_prom = rtt_total / rtt_count
+			else: 
+				rtt_prom = 0
+
+			record = None
 
 			if answer:
 				record = self.geoip.record_by_name(answer.src)
 			
-			self.hops.append(Hop(ttl=ttl, packet=answer, rtt=rtt, geoip=record, zscore=0.0))
+			self.hops.append(Hop(ttl=ttl, packet_ip=answer_ip, rtt=rtt_prom, geoip=record, zscore=0.0))
 
 			if answer:
 				hop = str(answer.src)
@@ -76,7 +106,7 @@ class Route:
 			else:
 				print "* * *"
 
-			if answer and answer.type == ECHO_REPLY:
+			if (answer and answer.type == ECHO_REPLY) or cant_not_replys >= CANT_NOT_REPLYS * REPEAT_COUNT:
 				hasReply = true
 				break
 
@@ -87,38 +117,45 @@ class Route:
 
 	def zscore(self):
 
-		last = None
-		for hop in self.hops:
-			if hop.packet:
-				if last:
-					hop.rtti = hop.rtt - last.rtt
+		self.hops[0].rtti = self.hops[0].rtt
+		last_rtt_not_zero = None
+
+		for i in range(1, len(self.hops)):
+			if self.hops[i].packet_ip != "":
+				if self.hops[i].rtt < self.hops[i-1].rtt:
+					self.hops[i].rtti = 0.0
 				else:
-					last = hop
+		
+					if not last_rtt_not_zero:
+						self.hops[i].rtti = self.hops[i].rtt - last_rtt_not_zero
+					else:
+						self.hops[i].rtti = self.hops[i].rtt
+					
+				last_rtt_not_zero = self.hops[i].rtt
+			else:
+				self.hops[i].rtti = 0.0
 
 		average = 0.0
-		count = 0.0
 
 		for hop in self.hops:
-			if hop.packet:
-				average += hop.rtti
-				count += 1
+			average += hop.rtti
 
-		average = average / count
+		average = average / float(len(self.hops))
 
 		variance = 0.0
 
 		for hop in self.hops:
-			if hop.packet:
-				variance += pow(hop.rtti - average, 2)
+			variance += pow(hop.rtti - average, 2)
 
-		variance = variance / count
+		variance = variance / float(len(self.hops)-1)
+		standard_deviation = math.sqrt(variance)
 
 		print "Average: " + str(average).replace('.', ',')
 		print "Variance: " + str(variance).replace('.', ',')
-		print "Standard Deviation: " + str(math.sqrt(variance)).replace('.', ',')
+		print "Standard Deviation: " + str(standard_deviation).replace('.', ',')
 
-		print "Average+SD: " + str(average + math.sqrt(variance)).replace('.', ',')
-		print "Average-SD: " + str(average - math.sqrt(variance)).replace('.', ',')
+		print "Average+SD: " + str(average + standard_deviation).replace('.', ',')
+		print "Average-SD: " + str(average - standard_deviation).replace('.', ',')
 
 		line = "IP"
 		line += "\t" + "zscore"
@@ -130,34 +167,37 @@ class Route:
 		print line
 
 		for hop in self.hops:
-			if hop.packet:
-				hop.zscore = (hop.rtti - average) / math.sqrt(variance)
-				line = str(hop.packet.src)
+			line = ""
+
+			if hop.packet_ip != "":
+				hop.zscore = (hop.rtti - average) / standard_deviation
+				line += hop.packet_ip
 				
 				if hop.geoip:
 					line += "(" + str(hop.geoip['time_zone']) + ")"
 
-				line += "\t" + str(hop.zscore).replace('.', ',')
-				line += "\t" + str(hop.rtti).replace('.', ',')
-				line += "\t" + str(average).replace('.', ',')
-				line += "\t" + str(math.sqrt(variance)).replace('.', ',')
-				line += "\t" + str(average + math.sqrt(variance)).replace('.', ',')
-				line += "\t" + str(average - math.sqrt(variance)).replace('.', ',')
-				print line #jeje
+			else:
+				line += "*"
 
-	def clear(self):
-		self.hops = []
+			line += "\t" + str(hop.zscore).replace('.', ',')
+			line += "\t" + str(hop.rtti).replace('.', ',')
+			line += "\t" + str(average).replace('.', ',')
+			line += "\t" + str(standard_deviation).replace('.', ',')
+			line += "\t" + str(average + standard_deviation).replace('.', ',')
+			line += "\t" + str(average - standard_deviation).replace('.', ',')
+			
+			print line
 
 def main(argv=sys.argv):
 	route = Route()
+
+	route.trace(universities[argv[1]])
+	route.zscore()
 
 #	for university in universities:
 #		route.trace(universities[university])
 #		route.zscore()
 #		print "-" * 80
-
-	route.trace('www.uio.no')
-	route.zscore()
 
 if __name__ == '__main__':
 	main()

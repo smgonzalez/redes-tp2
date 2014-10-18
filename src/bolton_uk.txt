@@ -1,0 +1,17 @@
+1	10.2.100.254 	echo-request	
+2	157.92.18.99 	echo-request	Argentina
+3	157.92.47.98 	echo-request	Argentina
+4	157.92.47.2 	echo-request	Argentina
+5	*	*	*
+6	168.96.0.18 	echo-request	Argentina
+7	200.0.204.154 	echo-request	Uruguay
+8	200.0.204.63 	echo-request	Uruguay
+9	62.40.124.36 	echo-request	United Kingdom
+10	62.40.124.198 	echo-request	United Kingdom
+11	146.97.33.2 	echo-request	United Kingdom
+12	146.97.33.22 	echo-request	United Kingdom
+13	146.97.33.42 	echo-request	United Kingdom
+14	146.97.41.62 	echo-request	United Kingdom
+15	194.66.27.18 	echo-request	United Kingdom
+16	194.66.26.114 	echo-request	United Kingdom
+17	193.63.48.69 	echo-reply	United Kingdom
